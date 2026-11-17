@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a1a2e">
+<link rel="manifest" href="manifest.json">
+<title>Mapa de Acupuntura</title>
+<style>
+:root {
+  --bg: #1a1a2e;
+  --surface: #16213e;
+  --primary: #e94560;
+  --accent: #0f3460;
+  --text: #eee;
+  --text-muted: #aaa;
+  --point-color: #e94560;
+  --point-glow: rgba(233, 69, 96, 0.5);
+  --meridian-color: rgba(233, 69, 96, 0.3);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  height: 100dvh;
+  width: 100vw;
+  touch-action: none;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+header h1 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 4px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.view-toggle button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-toggle button.active {
+  background: var(--primary);
+  color: white;
+}
+
+#canvas-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+}
+
+#canvas-container:active { cursor: grabbing; }
+
+svg#body-map {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.acu-point {
+  cursor: pointer;
+  transition: r 0.15s;
+}
+
+.acu-point:hover { r: 7; }
+
+.meridian-path {
+  fill: none;
+  stroke: var(--meridian-color);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+#info-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  padding: 16px 20px 28px;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 20;
+  max-height: 55dvh;
+  overflow-y: auto;
+  box-shadow: 0 -4px 30px rgba(0,0,0,0.5);
+}
+
+#info-panel.open { transform: translateY(0); }
+
+#info-panel .handle {
+  width: 36px;
+  height: 4px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 2px;
+  margin: 0 auto 14px;
+}
+
+#info-panel h2 {
+  font-size: 20px;
+  margin-bottom: 2px;
+  color: var(--primary);
+}
+
+#info-panel .point-id {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+#info-panel .section {
+  margin-bottom: 12px;
+}
+
+#info-panel .section h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+#info-panel .section p {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.zoom-controls {
+  position: absolute;
+  bottom: 20px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 15;
+}
+
+.zoom-controls button {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: none;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 22px;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-bar {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  z-index: 15;
+}
+
+.search-bar input {
+  width: 100%;
+  padding: 10px 14px 10px 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+}
+
+.search-bar input::placeholder { color: var(--text-muted); }
+
+.search-bar svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.5;
+}
+
+.search-results {
+  background: var(--surface);
+  border-radius: 12px;
+  margin-top: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  display: none;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+
+.search-results.visible { display: block; }
+
+.search-results .result-item {
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.search-results .result-item:hover { background: rgba(255,255,255,0.05); }
+.search-results .result-item .rid { color: var(--text-muted); font-size: 12px; }
+
+.filter-bar {
+  display: flex;
+  gap: 6px;
+  padding: 8px 16px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  background: var(--surface);
+  -webkit-overflow-scrolling: touch;
+}
+
+.filter-bar::-webkit-scrollbar { display: none; }
+
+.filter-chip {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.filter-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Mapa de Acupuntura</h1>
+    <div class="view-toggle">
+      <button class="active" data-view="front">Frontal</button>
+      <button data-view="back">Dorsal</button>
+      <button data-view="side">Lateral</button>
+    </div>
+  </header>
+
+  <div class="filter-bar">
+    <button class="filter-chip active" data-meridian="all">Todos</button>
+    <button class="filter-chip" data-meridian="LU">Pulmón</button>
+    <button class="filter-chip" data-meridian="LI">Int. Grueso</button>
+    <button class="filter-chip" data-meridian="ST">Estómago</button>
+    <button class="filter-chip" data-meridian="SP">Bazo</button>
+    <button class="filter-chip" data-meridian="HT">Corazón</button>
+    <button class="filter-chip" data-meridian="SI">Int. Delgado</button>
+    <button class="filter-chip" data-meridian="BL">Vejiga</button>
+    <button class="filter-chip" data-meridian="KI">Riñón</button>
+    <button class="filter-chip" data-meridian="PC">Pericardio</button>
+    <button class="filter-chip" data-meridian="TE">Triple Cal.</button>
+    <button class="filter-chip" data-meridian="GB">Vesícula B.</button>
+    <button class="filter-chip" data-meridian="LR">Hígado</button>
+    <button class="filter-chip" data-meridian="GV">Du Mai</button>
+    <button class="filter-chip" data-meridian="CV">Ren Mai</button>
+  </div>
+
+  <div id="canvas-container">
+    <div class="search-bar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="search-input" placeholder="Buscar punto (ej: LI4, Hegu, dolor cabeza)..." autocomplete="off">
+      <div class="search-results" id="search-results"></div>
+    </div>
+
+    <svg id="body-map" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <div class="zoom-controls">
+      <button id="zoom-in">+</button>
+      <button id="zoom-out">&minus;</button>
+      <button id="zoom-fit" style="font-size:14px">&#8634;</button>
+    </div>
+  </div>
+
+  <div id="info-panel">
+    <div class="handle"></div>
+    <h2 id="point-name"></h2>
+    <div class="point-id" id="point-code"></div>
+    <div class="section"><h3>Meridiano</h3><p id="point-meridian"></p></div>
+    <div class="section"><h3>Localización</h3><p id="point-location"></p></div>
+    <div class="section"><h3>Indicaciones</h3><p id="point-indications"></p></div>
+    <div class="section"><h3>Técnica</h3><p id="point-technique"></p></div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
