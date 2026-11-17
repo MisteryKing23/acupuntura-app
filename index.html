@@ -1,5 +1,9 @@
+<!DOCTYPE html>
+<html lang="es">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Mapa de Acupuntura</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
 <style>
 /* Single-theme dark app — a focused clinical tool */
@@ -164,6 +168,10 @@ svg#body-map {
   top: 0; left: 0;
   transform-origin: 0 0;
   will-change: transform;
+}
+
+#canvas-container.img-view {
+  background: #ebe1cd;
 }
 
 .acu-point { cursor: pointer; }
@@ -612,6 +620,9 @@ function el(tag,attrs){
 }
 
 const VIEW_SIZES={front:[400,900],back:[400,900],side:[400,900],hand:[300,230],foot:[310,230]};
+const VIEW_IMAGES={front:"img/front.jpg",back:"img/back.jpg",side:"img/side.jpg"};
+const HAS_IMAGE={front:true,back:true,side:true};
+
 function drawView(view){
   const[vw,vh]=VIEW_SIZES[view]||[SVG_W,SVG_H];
   svg.setAttribute("viewBox",`0 0 ${vw} ${vh}`);
@@ -619,33 +630,50 @@ function drawView(view){
   svg.setAttribute("height",vh);
   svg.innerHTML="";
 
-  svg.appendChild(el("rect",{width:vw,height:vh,fill:"transparent"}));
+  const useImg=HAS_IMAGE[view];
+  container.classList.toggle("img-view",!!useImg);
 
-  // Body outline
-  svg.appendChild(el("path",{d:BODY_OUTLINES[view]||"",fill:"rgba(255,255,255,0.03)",stroke:"rgba(255,255,255,0.12)","stroke-width":"1.2","stroke-linejoin":"round"}));
+  svg.appendChild(el("rect",{width:vw,height:vh,fill:useImg?"transparent":"transparent"}));
+
+  if(useImg){
+    // Anatomical image background
+    const img=el("image",{href:VIEW_IMAGES[view],x:0,y:0,width:vw,height:vh,preserveAspectRatio:"none"});
+    svg.appendChild(img);
+  } else {
+    // SVG outline for hand/foot
+    svg.appendChild(el("path",{d:BODY_OUTLINES[view]||"",fill:"rgba(255,255,255,0.03)",stroke:"rgba(255,255,255,0.12)","stroke-width":"1.2","stroke-linejoin":"round"}));
+  }
 
   // Reference labels
+  const refColor=useImg?"rgba(80,40,10,0.35)":"rgba(255,255,255,0.12)";
+  const refLine=useImg?"rgba(80,40,10,0.15)":"rgba(255,255,255,0.08)";
   (BODY_REFS[view]||[]).forEach(r=>{
-    svg.appendChild(el("line",{x1:10,x2:22,y1:r.y,y2:r.y,stroke:"rgba(255,255,255,0.08)","stroke-width":"0.5"}));
-    const t=el("text",{x:12,y:r.y-3,fill:"rgba(255,255,255,0.12)","font-size":"6.5","font-family":"system-ui"});
+    svg.appendChild(el("line",{x1:10,x2:22,y1:r.y,y2:r.y,stroke:refLine,"stroke-width":"0.5"}));
+    const t=el("text",{x:12,y:r.y-3,fill:refColor,"font-size":"6.5","font-family":"system-ui","font-weight":"600"});
     t.textContent=r.l; svg.appendChild(t);
   });
 
   // Points
   const pts=allPoints.filter(p=>p.views[view]);
+  const labelFill=useImg?"rgba(30,10,0,0.75)":"rgba(255,255,255,0.55)";
   pts.forEach(p=>{
     if(currentMeridian!=="all"&&p.meridian!==currentMeridian) return;
     const[cx,cy]=p.views[view];
     const color=MERIDIAN_COLORS[p.meridian]||"#e05070";
 
     // Glow
-    svg.appendChild(el("circle",{cx,cy,r:"9",fill:color,opacity:"0.12"}));
+    svg.appendChild(el("circle",{cx,cy,r:useImg?"10":"9",fill:color,opacity:useImg?"0.25":"0.12"}));
     // Dot
-    const dot=el("circle",{cx,cy,r:"3.5",fill:color,stroke:"rgba(255,255,255,0.8)","stroke-width":"0.7","data-id":p.id,style:"cursor:pointer"});
+    const dot=el("circle",{cx,cy,r:"4",fill:color,stroke:useImg?"rgba(0,0,0,0.5)":"rgba(255,255,255,0.8)","stroke-width":useImg?"1":"0.7","data-id":p.id,style:"cursor:pointer"});
     dot.addEventListener("click",e=>{e.stopPropagation();showInfo(p);});
     svg.appendChild(dot);
     // Label
-    const label=el("text",{x:+cx+6,y:+cy+3,fill:"rgba(255,255,255,0.55)","font-size":"5.5","font-family":"system-ui"});
+    const label=el("text",{x:+cx+7,y:+cy+3,fill:labelFill,"font-size":"5.5","font-family":"system-ui","font-weight":useImg?"700":"400"});
+    if(useImg){
+      label.setAttribute("stroke","rgba(235,225,205,0.7)");
+      label.setAttribute("stroke-width","2");
+      label.setAttribute("paint-order","stroke");
+    }
     label.textContent=p.id; svg.appendChild(label);
   });
 }
@@ -665,10 +693,12 @@ function showInfo(p){
 
   infoPanel.classList.add("open");
 
+  const useImg=HAS_IMAGE[currentView];
   svg.querySelectorAll("circle[data-id]").forEach(c=>{
     const isActive=c.getAttribute("data-id")===p.id;
-    c.setAttribute("stroke-width",isActive?"2":"0.7");
-    c.setAttribute("r",isActive?"5.5":"3.5");
+    c.setAttribute("stroke-width",isActive?"2.5":(useImg?"1":"0.7"));
+    c.setAttribute("r",isActive?"6":"4");
+    if(isActive) c.setAttribute("stroke","#fff");
   });
 }
 
